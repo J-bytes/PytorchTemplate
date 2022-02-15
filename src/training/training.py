@@ -2,6 +2,7 @@ import warnings
 
 import torch
 import tqdm
+import copy
 # import comet_ml at the top of your file
 from comet_ml import Experiment
 
@@ -24,14 +25,19 @@ from src.models.Unet import Unet
 # validation_set =hub.load("hub://activeloop/coco-val")
 
 # Create data loaders for our datasets; shuffle for training, not for validation
-# training_loader =  training_set.pytorch(num_workers=0, batch_size=4, shuffle=False)#torch.utils.data.DataLoader(training_set, batch_size=4, shuffle=True, num_workers=4,pin_memory=True)
-# validation_loader = validation_set.pytorch(num_workers=0, batch_size=4, shuffle=False)#torch.utils.data.DataLoader(validation_set, batch_size=4, shuffle=False, num_workers=4,pin_memory=True)
-from src.training.dataloaders.brain_tumour_dataloader import BrainSegmentationDataset
-dataset1=BrainSegmentationDataset("data/medical_data/Brain_tumours/imagesTr")
-dataset2=BrainSegmentationDataset("data/medical_data/Brain_tumours/imagesTs",subset="valid")
-training_loader=torch.utils.data.DataLoader(dataset1, batch_size=4, shuffle=True, num_workers=4,pin_memory=True)
-validation_loader=torch.utils.data.DataLoader(dataset2, batch_size=4, shuffle=True, num_workers=4,pin_memory=True)
+# from src.training.dataloaders.brain_tumour_dataloader import BrainSegmentationDataset
+# dataset1=BrainSegmentationDataset("data/medical_data/BraTS2021_Training_Data/training",subset="train")
+# dataset2=BrainSegmentationDataset("data/medical_data/BraTS2021_Training_Data/validation",subset="validation")
+# training_loader=torch.utils.data.DataLoader(dataset1, batch_size=4, shuffle=True, num_workers=4,pin_memory=True)
+# validation_loader=torch.utils.data.DataLoader(dataset2, batch_size=4, shuffle=True, num_workers=4,pin_memory=True)
 
+from src.training.dataloaders.galaxy_dataloader import CustomDataset
+data_path="/mnt/g/data_galaxies/expanded_dataset_v010.h5"
+train_dataset=CustomDataset(data_path, method="train", val_size=0.2, test_size=0.2)
+val_dataset=copy.copy(train_dataset)
+val_dataset.method="val"
+training_loader=torch.utils.data.DataLoader(train_dataset, batch_size=4, shuffle=True, num_workers=4,pin_memory=True)
+validation_loader=torch.utils.data.DataLoader(val_dataset, batch_size=4, shuffle=True, num_workers=4,pin_memory=True)
 # Report split sizes
 #print('Training set has {} instances'.format(len(training_set)))
 #print('Validation set has {} instances'.format(len(validation_set)))
@@ -51,9 +57,9 @@ criterion=torch.nn.BCELoss() # to replace
 
 def training_loop(model,loader,optimizer,criterion) :
     running_loss=0
-    for data in tqdm.tqdm(loader):
+    for inputs,labels in tqdm.tqdm(loader):
         # get the inputs; data is a list of [inputs, labels]
-        inputs, labels = data.tensors.images,data.tensors
+
         inputs,labels=inputs.to(device),labels.to(device)
 
         # zero the parameter gradients

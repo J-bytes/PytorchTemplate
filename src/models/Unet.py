@@ -82,7 +82,7 @@ class Encoder(torch.nn.Module):
         times when defining a computational graph.
         """
 
-        for d in self.depth :
+        for d in range(0,self.depth) :
             self.inputs=self.inputs.append(x)
             x=self.downsampling[d](x)
 
@@ -113,7 +113,7 @@ class Decoder(torch.nn.Module):
         """
 
 
-        for d in self.depth:
+        for d in range(0,self.depth):
 
             x = self.upsampling[d](x)
             x+=self.skips[d] #skip connection : to replace with concatenation later
