@@ -1,22 +1,12 @@
-import warnings
 
 import torch
 import tqdm
-import copy
-# import comet_ml at the top of your file
-from comet_ml import Experiment
 
-# Create an experiment with your api key
-#experiment = Experiment(
-#    api_key="HLrroRFl9Ay2kurjtwuq6Kmq9",
-#    project_name="ift6759",
-#    workspace="bariljeanfrancois",
-#)
 
-# Run your code and go to /
 
-# local imports
-from src.models.Unet import Unet
+
+
+
 
 
 # Create datasets for training & validation, download if necessary
@@ -31,33 +21,17 @@ from src.models.Unet import Unet
 # training_loader=torch.utils.data.DataLoader(dataset1, batch_size=4, shuffle=True, num_workers=4,pin_memory=True)
 # validation_loader=torch.utils.data.DataLoader(dataset2, batch_size=4, shuffle=True, num_workers=4,pin_memory=True)
 
-from src.training.dataloaders.galaxy_dataloader import CustomDataset
-data_path="/mnt/g/data_galaxies/expanded_dataset_v010.h5"
-train_dataset=CustomDataset(data_path, method="train", val_size=0.2, test_size=0.2)
-val_dataset=copy.copy(train_dataset)
-val_dataset.method="val"
-training_loader=torch.utils.data.DataLoader(train_dataset, batch_size=4, shuffle=True, num_workers=4,pin_memory=True)
-validation_loader=torch.utils.data.DataLoader(val_dataset, batch_size=4, shuffle=True, num_workers=4,pin_memory=True)
-# Report split sizes
-#print('Training set has {} instances'.format(len(training_set)))
-#print('Validation set has {} instances'.format(len(validation_set)))
-
-# global variables
-if torch.cuda.is_available() :
-    device="cuda:0"
-else :
-    device="cpu"
-    warnings.warn("No gpu is available for the computation")
-
-model=Unet(depth=3,channels=[1,2,3]).to(device)
-optimizer=torch.optim.AdamW(model.parameters())
-criterion=torch.nn.BCELoss() # to replace
 
 # training loop
 
-def training_loop(model,loader,optimizer,criterion) :
+def training_loop(model,loader,optimizer,criterion,device,verbose,epoch,metrics) :
     running_loss=0
-    for inputs,labels in tqdm.tqdm(loader):
+    i=0
+    metrics_results = {}
+    if metrics :
+        for key in metrics:
+            metrics_results[key] = 0
+    for inputs,labels in loader:
         # get the inputs; data is a list of [inputs, labels]
 
         inputs,labels=inputs.to(device),labels.to(device)
@@ -66,46 +40,93 @@ def training_loop(model,loader,optimizer,criterion) :
         optimizer.zero_grad()
 
         # forward + backward + optimize
+
         outputs = model(inputs)
         loss = criterion(outputs, labels)
         loss.backward()
         optimizer.step()
         running_loss+=loss.detach()
-    return running_loss
+
+        if verbose and i % 20 == 0:
+            print(f" epoch : {epoch} , iteration :{i} ,running_loss : {running_loss}")
+
+        if metrics :
+            for key in metrics:
+                metrics_results[key]+= metrics[key](outputs,labels)/len(inputs)
+
+        #ending loop
+        del inputs,labels,loss,outputs #garbage management sometimes fails with cuda
+        i+=1
+    return running_loss,metrics_results
 
 
 
-def validation_loop(model,loader,criterion):
+def validation_loop(model,loader,criterion,device,verbose,epoch,metrics):
     running_loss=0
+    i=0
+
+    metrics_results={}
+    if metrics :
+        for key in metrics :
+            metrics_results[key]=0
     with torch.no_grad() :
-        for i, data in enumerate(loader):
+        for inputs,labels in loader:
             # get the inputs; data is a list of [inputs, labels]
-            inputs, labels = data
+
+            inputs,labels=inputs.to(device),labels.to(device)
 
             # forward + backward + optimize
             outputs = model(inputs)
             loss = criterion(outputs, labels)
             running_loss+=loss.detach()
-    return running_loss
 
-previous_loss=1000
-current_loss=0
-epoch,epoch_max=0,150
-while (current_loss-previous_loss)<0 and epoch<epoch_max:  # loop over the dataset multiple times
+            if verbose and i%20==0 :
+                print(f" epoch : {epoch} , iteration :{i} ,running_loss : {running_loss}")
 
-    running_loss = 0.0
-    train_loss=training_loop(model,training_loader,optimizer,criterion)
-    val_loss=validation_loop(model,validation_loader,criterion)
-
-    #other evaluation metrics to display :
-    #f1_loss, etc
-
-    #log the results :
+            if metrics :
+                for key in metrics:
+                    metrics_results[key] += metrics[key](outputs, labels) / len(inputs)
+            #ending loop
+            del inputs,labels,outputs,loss #garbage management sometimes fails with cuda
+            i+=1
+    return running_loss,metrics_results
 
 
-    #save the model after XX iterations :
+
+def training(model,optimizer,criterion,training_loader,validation_loader,device="cpu",metrics=None,verbose=False,experiment=None) :
+    previous_loss=1000
+    current_loss=0
+    epoch,epoch_max=0,150
+
+    if not verbose :
+        training_loader=tqdm.tqdm(training_loader)
+        validation_loader=tqdm.tqdm(validation_loader)
+
+    train_loss_list=[]
+    val_loss_list=[]
+    while (current_loss-previous_loss)<0 and epoch<epoch_max:  # loop over the dataset multiple times
 
 
-    #Finishing the loop
-    epoch+=1
-print('Finished Training')
+        train_loss,metrics_results=training_loop(model,training_loader,optimizer,criterion,device,verbose,epoch,metrics)
+        val_loss,metrics_results=validation_loop(model,validation_loader,criterion,device,verbose,epoch.metrics)
+
+        #other evaluation metrics to display :
+
+
+        #log the results :
+        train_loss_list.append(train_loss)
+        val_loss_list.append(val_loss)
+        if experiment :
+            experiment.log_metric("training_loss",train_loss,epoch=epoch)
+            experiment.log_metric("validation_loss", val_loss,epoch=epoch)
+            for key in metrics_results :
+                experiment.log_metric(key,metrics_results[key],epoch=epoch)
+            #et
+
+        #save the model after XX iterations :
+        if epoch%20==0 :
+            torch.save(model.state_dict(),"models/models_weights/")
+
+        #Finishing the loop
+        epoch+=1
+    print('Finished Training')

@@ -53,7 +53,7 @@ class Upblock(torch.nn.Module):
         x = self.bn2(x)
         x = self.upsample(x)
         x = self.activation(x)
-        return x,input
+        return x
 
 
 class Encoder(torch.nn.Module):
@@ -64,7 +64,7 @@ class Encoder(torch.nn.Module):
         super().__init__()
 
         #downsampling to latent space
-        self.downsampling=torch.nn.ModuleList([Downblock(in_channels=channels[i],out_channels=channels[i+1]) for i in range(depth-1)])
+        self.downsampling=torch.nn.ModuleList([Downblock(in_channels=channels[i],out_channels=channels[i+1]) for i in range(depth)])
         self.inputs=[]
         self.depth=depth
 
@@ -83,21 +83,21 @@ class Encoder(torch.nn.Module):
         """
 
         for d in range(0,self.depth) :
-            self.inputs=self.inputs.append(x)
+            self.inputs.append(x)
             x=self.downsampling[d](x)
 
         return x
 
 
 class Decoder(torch.nn.Module):
-    def __init__(self,depth,channels,skips=[]):
+    def __init__(self,depth,channels):
         """
         In the constructor we instantiate five parameters and assign them as members.
         """
         super().__init__()
-        self.upsampling=torch.nn.ModuleList([Upblock(in_channels=channels[i],out_channels=channels[i+1]) for i in range(depth-1)])
+        self.upsampling=torch.nn.ModuleList([Upblock(in_channels=channels[i],out_channels=channels[i+1]) for i in range(depth)])
 
-        self.skips=skips[::-1]# inverse order
+        self.skips=[]# inverse order
         self.depth=depth
     def forward(self, x):
         """
@@ -111,12 +111,15 @@ class Decoder(torch.nn.Module):
         Here we also see that it is perfectly safe to reuse the same parameter many
         times when defining a computational graph.
         """
-
-
-        for d in range(0,self.depth):
-
-            x = self.upsampling[d](x)
-            x+=self.skips[d] #skip connection : to replace with concatenation later
+        a,b,c=x.shape
+        self.skips=torch.as_tensor(self.skips).reshape((self.depth,a,b,c))
+        assert len(self.skips)==self.depth, f"Missing skips connection depth={self.depth} len(skips)={len(self.skips)} x.shape={self.skips[0].shape}"
+        for block,skip in zip(self.upsampling,self.skips) :
+            x=block(x)+skip
+        # for d in range(0,self.depth):
+        #     f=self.upsampling[d]
+        #     x = f(x)
+        #     x = x+self.skips[d] #skip connection : to replace with concatenation later
 
         return x
 
@@ -126,7 +129,7 @@ class Unet(torch.nn.Module):
         """
         In the constructor we instantiate five parameters and assign them as members.
         """
-        assert len(channels)==depth
+        assert len(channels)==depth+1,"Your channels configuration does not match the desired depth.Make sure len(channels)=depth+1"
         super().__init__()
 
         self.encoder = Encoder(depth, channels)

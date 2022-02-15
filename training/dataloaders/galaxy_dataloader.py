@@ -60,7 +60,8 @@ class CustomDataset(Dataset):
                 "val": self.lenses_keys[arg1:arg2, :],
                 "test": self.lenses_keys[arg2::, :]
             }
-        except:
+        except Exception as e:
+            print(e)
             self.keys = self.h5f.keys()
             nkeys = len(list(self.keys))
 
