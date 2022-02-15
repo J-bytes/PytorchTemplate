@@ -111,15 +111,14 @@ class Decoder(torch.nn.Module):
         Here we also see that it is perfectly safe to reuse the same parameter many
         times when defining a computational graph.
         """
-        a,b,c=x.shape
-        self.skips=torch.as_tensor(self.skips).reshape((self.depth,a,b,c))
-        assert len(self.skips)==self.depth, f"Missing skips connection depth={self.depth} len(skips)={len(self.skips)} x.shape={self.skips[0].shape}"
-        for block,skip in zip(self.upsampling,self.skips) :
-            x=block(x)+skip
-        # for d in range(0,self.depth):
-        #     f=self.upsampling[d]
-        #     x = f(x)
-        #     x = x+self.skips[d] #skip connection : to replace with concatenation later
+
+
+
+
+        #assert len(self.skips)==self.depth, f"Missing skips connection depth={self.depth} len(skips)={len(self.skips)} x.shape={self.skips[0].shape}"
+        for d,block in enumerate(self.upsampling) :
+            x=block(x)+self.skips[d]
+
 
         return x
 
