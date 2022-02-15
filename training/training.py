@@ -108,7 +108,7 @@ def training(model,optimizer,criterion,training_loader,validation_loader,device=
 
 
         train_loss,metrics_results=training_loop(model,training_loader,optimizer,criterion,device,verbose,epoch,metrics)
-        val_loss,metrics_results=validation_loop(model,validation_loader,criterion,device,verbose,epoch.metrics)
+        val_loss,metrics_results=validation_loop(model,validation_loader,criterion,device,verbose,epoch,metrics)
 
         #other evaluation metrics to display :
 

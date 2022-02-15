@@ -14,7 +14,7 @@ from models.Unet import Unet
 
 #-------data initialisation-------------------------------
 data_path="/mnt/g/data_galaxies/expanded_dataset_v010.h5"
-train_dataset=CustomDataset(data_path, method="train", val_size=0.2, test_size=0.2)
+train_dataset=CustomDataset(data_path, method="train", val_size=0.2, test_size=0.7)
 val_dataset=copy.copy(train_dataset)
 val_dataset.method="val"
 training_loader=torch.utils.data.DataLoader(train_dataset, batch_size=4, shuffle=True, num_workers=4,pin_memory=True)
