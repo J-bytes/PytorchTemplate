@@ -35,7 +35,7 @@ print("The model has now been successfully loaded into memory")
 #---comet logger initialisation
 # Create an experiment with your api key
 #experiment = Experiment(
-#    api_key="HLrroRFl9Ay2kurjtwuq6Kmq9",
+#    api_key="",
 #    project_name="ift6759",
 #    workspace="bariljeanfrancois",
 #)
