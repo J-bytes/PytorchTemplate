@@ -1,132 +1,126 @@
 
 import torch
 import tqdm
+import numpy as np
 
 
+def training_loop(model,loader,optimizer,criterion,device,minibatch_accumulate) :
+    """
 
-
-
-
-
-
-# Create datasets for training & validation, download if necessary
-# import hub
-# training_set =hub.load("hub://activeloop/coco-train")
-# validation_set =hub.load("hub://activeloop/coco-val")
-
-# Create data loaders for our datasets; shuffle for training, not for validation
-# from src.training.dataloaders.brain_tumour_dataloader import BrainSegmentationDataset
-# dataset1=BrainSegmentationDataset("data/medical_data/BraTS2021_Training_Data/training",subset="train")
-# dataset2=BrainSegmentationDataset("data/medical_data/BraTS2021_Training_Data/validation",subset="validation")
-# training_loader=torch.utils.data.DataLoader(dataset1, batch_size=4, shuffle=True, num_workers=4,pin_memory=True)
-# validation_loader=torch.utils.data.DataLoader(dataset2, batch_size=4, shuffle=True, num_workers=4,pin_memory=True)
-
-
-# training loop
-
-def training_loop(model,loader,optimizer,criterion,device,verbose,epoch,metrics) :
+    :param model: model to train
+    :param loader: training dataloader
+    :param optimizer: optimizer
+    :param criterion: criterion for the loss
+    :param device: device to do the computations on
+    :param minibatch_accumulate: number of minibatch to accumulate before applying gradient. Can be useful on smaller gpu memory
+    :return: epoch loss, tensor of concatenated labels and predictions
+    """
     running_loss=0
+
+    results=[torch.tensor([]),torch.tensor([])]
+    model.train()
     i=0
-    metrics_results = {}
-    if metrics :
-        for key in metrics:
-            metrics_results[key] = 0
     for inputs,labels in loader:
         # get the inputs; data is a list of [inputs, labels]
+        batch_size=inputs.shape[0]
+        results[0]=torch.cat((results[0],labels),dim=0)
+        inputs,labels=inputs.to(device,non_blocking=True),labels.to(device,non_blocking=True)
 
-        inputs,labels=inputs.to(device),labels.to(device)
 
-        # zero the parameter gradients
-        optimizer.zero_grad()
 
         # forward + backward + optimize
 
         outputs = model(inputs)
         loss = criterion(outputs, labels)
+
+        results[1] = torch.cat((results[1], torch.nn.functional.softmax(outputs,dim=1).detach().cpu()),dim=0)
+
         loss.backward()
-        optimizer.step()
-        running_loss+=loss.detach()
+        running_loss+=loss.detach()/batch_size
 
-        if verbose and i % 20 == 0:
-            print(f" epoch : {epoch} , iteration :{i} ,running_loss : {running_loss}")
-
-        if metrics :
-            for key in metrics:
-                metrics_results[key]+= metrics[key](outputs,labels)/len(inputs)
+        #gradient accumulation
+        if i%minibatch_accumulate==0 :
+            i=0
+            optimizer.step()
+            model.zero_grad(set_to_none=True)
 
         #ending loop
         del inputs,labels,loss,outputs #garbage management sometimes fails with cuda
         i+=1
-    return running_loss,metrics_results
+    return running_loss,results
 
 
+@torch.no_grad()
+def validation_loop(model,loader,criterion,device):
+    """
 
-def validation_loop(model,loader,criterion,device,verbose,epoch,metrics):
+    :param model: model to evaluate
+    :param loader: dataset loader
+    :param criterion: criterion to evaluate the loss
+    :param device: device to do the computation on
+    :return: val_loss for the N epoch, tensor of concatenated labels and predictions
+    """
     running_loss=0
-    i=0
 
-    metrics_results={}
-    if metrics :
-        for key in metrics :
-            metrics_results[key]=0
-    with torch.no_grad() :
-        for inputs,labels in loader:
-            # get the inputs; data is a list of [inputs, labels]
+    model.eval()
+    results = [torch.tensor([]), torch.tensor([])]
 
-            inputs,labels=inputs.to(device),labels.to(device)
+    for inputs,labels in loader:
+        # get the inputs; data is a list of [inputs, labels]
+        batch_size=inputs.shape[0]
+        results[0] = torch.cat((results[0], labels),dim=0)
+        inputs,labels=inputs.to(device,non_blocking=True),labels.to(device,non_blocking=True)
 
-            # forward + backward + optimize
-            outputs = model(inputs)
-            loss = criterion(outputs, labels)
-            running_loss+=loss.detach()
+        # forward + backward + optimize
 
-            if verbose and i%20==0 :
-                print(f" epoch : {epoch} , iteration :{i} ,running_loss : {running_loss}")
+        outputs = model(inputs)
+        loss = criterion(outputs, labels)
+        results[1] = torch.cat((results[1], torch.nn.functional.softmax(outputs,dim=1).detach().cpu()),dim=0)
 
-            if metrics :
-                for key in metrics:
-                    metrics_results[key] += metrics[key](outputs, labels) / len(inputs)
-            #ending loop
-            del inputs,labels,outputs,loss #garbage management sometimes fails with cuda
-            i+=1
-    return running_loss,metrics_results
+        running_loss+=loss.detach()/batch_size
 
 
 
-def training(model,optimizer,criterion,training_loader,validation_loader,device="cpu",metrics=None,verbose=False,experiment=None) :
-    previous_loss=1000
-    current_loss=0
-    epoch,epoch_max=0,150
+        del inputs,labels,outputs,loss #garbage management sometimes fails with cuda
 
-    if not verbose :
-        training_loader=tqdm.tqdm(training_loader)
-        validation_loader=tqdm.tqdm(validation_loader)
 
+    return running_loss,results
+
+def training(model,optimizer,criterion,training_loader,validation_loader,device="cpu",metrics=None,minibatch_accumulate=1,experiment=None,patience=5,epoch_max=50, batch_size=1) :
+
+    epoch=0
     train_loss_list=[]
     val_loss_list=[]
-    while (current_loss-previous_loss)<0 and epoch<epoch_max:  # loop over the dataset multiple times
+    best_loss=np.inf
+
+    patience_init=patience
+    pbar = tqdm.tqdm(total=epoch_max)
+    while patience>0 and epoch<epoch_max:  # loop over the dataset multiple times
 
 
-        train_loss,metrics_results=training_loop(model,training_loader,optimizer,criterion,device,verbose,epoch,metrics)
-        val_loss,metrics_results=validation_loop(model,validation_loader,criterion,device,verbose,epoch,metrics)
-
-        #other evaluation metrics to display :
+        train_loss,results = training_loop(model, tqdm.tqdm(training_loader, leave=False), optimizer, criterion, device, minibatch_accumulate)
+        val_loss, results = validation_loop(model, tqdm.tqdm(validation_loader, leave=False), criterion, device)
 
 
-        #log the results :
+        #LOGGING DATA
         train_loss_list.append(train_loss)
         val_loss_list.append(val_loss)
         if experiment :
-            experiment.log_metric("training_loss",train_loss,epoch=epoch)
-            experiment.log_metric("validation_loss", val_loss,epoch=epoch)
-            for key in metrics_results :
-                experiment.log_metric(key,metrics_results[key],epoch=epoch)
-            #et
+            experiment.log_metric("training_loss",train_loss.tolist(),epoch=epoch)
+            experiment.log_metric("validation_loss", val_loss.tolist(),epoch=epoch)
 
-        #save the model after XX iterations :
-        if epoch%20==0 :
-            torch.save(model.state_dict(),"models/models_weights/")
+            for key in metrics :
+                experiment.log_metric(key,metrics[key](results[1].numpy(),results[0].numpy()),epoch=epoch)
 
+        if val_loss<best_loss :
+            best_loss=val_loss
+
+            experiment.save_weights(model)
+            patience=patience_init
+        else :
+            patience-=1
+            print("patience has been reduced by 1")
         #Finishing the loop
         epoch+=1
+        pbar.update(1)
     print('Finished Training')
