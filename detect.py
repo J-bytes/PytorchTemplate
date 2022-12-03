@@ -9,7 +9,7 @@ from custom_utils import  Experiment,preprocessing,metrics
 from sklearn.metrics import confusion_matrix
 from  sklearn.metrics import top_k_accuracy_score
 from training.training import validation_loop
-from training.dataloaders.cct_dataloader import CustomImageDataset
+from dataloaders.cct_dataloader import CustomImageDataset
 def init_argparse() :
     parser = argparse.ArgumentParser(description='Launch testing for a specific model')
 
