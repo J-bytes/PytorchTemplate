@@ -1,14 +1,16 @@
 import numpy as np
-import sklearn.metrics
+
 import timm.utils.metrics
-from sklearn import metrics
-from sklearn.metrics import roc_curve, auc,f1_score,recall_score,precision_score
-import logging
-from libauc.metrics import roc_auc_score
+
+from sklearn.metrics import f1_score,recall_score,precision_score,roc_auc_score
+
+
+from PytorchTemplate import names
+
 class Metrics:
-    def __init__(self, num_classes, names, threshold):
-        self.num_classes = num_classes
-        self.thresholds = threshold
+    def __init__(self):
+        self.num_classes = len(names)
+        self.thresholds = [0.5,]*self.num_classes
         self.names = names
 
     # def convert(self,pred):
@@ -22,7 +24,7 @@ class Metrics:
     #     return pred
 
 
-        self.convert = lambda x : x
+        self.convert = lambda x : x #if you wish to use default threshold
 
 
 
@@ -39,14 +41,10 @@ class Metrics:
         accuracy = timm.utils.metrics.accuracy(pred,true, topk=(3,))
         return accuracy
     def accuracy(self, true, pred):
-        pred = self.convert(pred)
-        pred = np.where(pred > 0.5, 1, 0)
+        true = np.argmax(true,axis=1)
+        pred = np.argmax(pred,axis=1)
+        accuracy = np.sum(true==pred)/len(true)
 
-        accuracy = 0
-        for x, y in zip(true, pred):
-            if (x == y).all():
-                accuracy += 1
-        #accuracy = timm.utils.metrics.accuracy(pred,true, topk=(1,))
         return accuracy
 
     def f1(self, true, pred):
@@ -140,20 +138,18 @@ class Metrics:
 
     def metrics(self):
         dict = {
-            "auc": self.computeAUROC,
-            "f1": self.f1,
-            "recall": self.recall,
-            "precision": self.precision,
             "accuracy": self.accuracy,
 
         }
         return dict
 
 
+metrics = Metrics().metrics()
+
 if __name__=="__main__" :
-    from CheXpert2 import names
+    from PytorchTemplate import names
     num_classes=len(names)
-    metric = Metrics(num_classes=num_classes, names=names, threshold=np.zeros((num_classes)) + 0.5)
+    metric = Metrics()
     metrics = metric.metrics()
     print(metrics)
     label=np.random.randint(0,2,(10,num_classes))
