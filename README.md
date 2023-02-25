@@ -26,21 +26,21 @@ These templates file would be useless without the ability to rapidly customize t
 The following sections describe how to customize the template for your own project.
 
 
-#### Config
+### Config
 
 Most parameters are already defined in Parser.py . Ideally every hyperparameters should be defined there as they will then be given 
 to Weight&Biases as the config of the run. If those parameters are defined, and are used by the selected optimizer, PytorchTemplate will
 automatically use them without any additional code.
 
 
-#### Training/validation loop
+### Training/validation loop
 
 If you wish to perform a different task than image classification, you will need to modify the training and validation loops.
 You can find examples in PytorchTemplate/variation of children class of Experiment for adversarial training and Distillation.
 
 Simply copy the body of thetraining loop, and modify it to your needs. Just make sure you import the right experiment in your training file!
 
-#### Train.py
+### Train.py
 
 When the experiment is initialized, you then need to compile te different components of the training loop.
 
@@ -55,3 +55,14 @@ Compile mostly take string arguments to define the model, the optimizer, and the
 ANY KEYWORD ARGUMENTS PASSED TO EXPERIMENT.TRAIN() WILL OVERRIDE THE DEFAULTS DEFINED IN COMPILE!
 
 You can therefore, for example, write a custom loss function and simply call experiment.train(criterion=my_custom_loss) to use it!
+
+
+## Future Work 
+
+1.  Add support for more tasks (object detection, etc.)
+2.  Add support for huggingFace models
+3.  Validate the code on more tasks,optimizers, etc
+4.  Add support for more logging tools (Tensorboard, etc.)
+5.  Add support for more datasets
+6.  Generate a report at the end of training
+7.  Set up a Project Planner
