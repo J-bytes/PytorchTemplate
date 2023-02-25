@@ -60,9 +60,10 @@ You can therefore, for example, write a custom loss function and simply call exp
 ## Future Work 
 
 1.  Add support for more tasks (object detection, etc.)
-2.  Add support for huggingFace models
+2.  wrap the huggingFace models
 3.  Validate the code on more tasks,optimizers, etc
 4.  Add support for more logging tools (Tensorboard, etc.)
 5.  Add support for more datasets
 6.  Generate a report at the end of training
 7.  Set up a Project Planner
+8.  wrap pytorch metric learning library
