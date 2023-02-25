@@ -39,7 +39,7 @@ train_transform=transforms.Compose(
         ]
     )
 
-def Dataset(dataset : torch.utils.data.Dataset or str,num_classes : int,batch_size,valid_size,shuffle,num_workers,pin_memory,mean,std,root,debug,prob,label_smoothing,extras={}) :
+def Dataset(Dataset : torch.utils.data.Dataset or str,num_classes : int,batch_size,valid_size,shuffle,num_workers,pin_memory,mean,std,root,debug,prob,label_smoothing,extras={}) :
     """
 
     :param dataset: Pytorch Dataset or string of a dataset name in torchvision.datasets
@@ -95,25 +95,26 @@ def Dataset(dataset : torch.utils.data.Dataset or str,num_classes : int,batch_si
 
 
     #-------- Dataset ----------------
-    if type(dataset) == str :
-        assert dataset in dir (datasets), "Dataset not found in torchvision.datasets"
-        dataset = getattr(datasets,dataset)
+    if type(Dataset) == str :
+        assert Dataset in dir (datasets), "Dataset not found in torchvision.datasets"
+        Dataset = getattr(datasets,Dataset)
 
-        signature = inspect.signature(dataset.__init__)
+    signature = inspect.signature(Dataset.__init__)
 
-        cfg = {
-            "root" : root,
-            "train" : True,
-            "download" : True,
-            "transform" : train_transform,
-            "target_transform" : target_transform(smooth=label_smoothing, num_classes=num_classes)
-        } | extras
+    cfg = {
+        "root" : root,
+        "train" : True,
+        "download" : True,
+        "transform" : train_transform,
+        "target_transform" : target_transform(smooth=label_smoothing, num_classes=num_classes)
+    } | extras
 
-        cfg = {k:v for k,v in cfg.items() if k in signature.parameters}
-        dataset = dataset(**cfg)
-
+    cfg = {k:v for k,v in cfg.items() if k in signature.parameters}
+    dataset = Dataset(**cfg)
     setattr(dataset, "advanced_transform", advanced_transform)
     setattr(dataset, "normalize", normalization)
+
+
     num_train = len(dataset)
     indices = list(range(num_train))
     split = int(np.floor(valid_size * num_train))
@@ -122,12 +123,43 @@ def Dataset(dataset : torch.utils.data.Dataset or str,num_classes : int,batch_si
         # np.random.seed(random_seed)
         np.random.shuffle(indices)
 
-    if debug:
-        train_idx, valid_idx = indices[0:1000], indices[-1000:]
-    else:
-        train_idx, valid_idx = indices[split:], indices[:split]
-    train_sampler = torch.utils.data.sampler.SubsetRandomSampler(train_idx)
-    valid_sampler = torch.utils.data.sampler.SubsetRandomSampler(valid_idx)
+
+    if debug :
+        train_idx, valid_idx,test_idx = indices[0:10], indices[10:20],indices[20:30]
+        train_sampler = torch.utils.data.sampler.SubsetRandomSampler(train_idx)
+        valid_sampler = torch.utils.data.sampler.SubsetRandomSampler(valid_idx)
+        test_sampler = torch.utils.data.sampler.SubsetRandomSampler(test_idx)
+        test_loader = torch.utils.data.DataLoader(
+            training_data, batch_size=batch_size, sampler=test_sampler,
+            num_workers=num_workers, pin_memory=pin_memory,
+        )
+    else :
+
+        if "train" in signature.parameters.keys() :
+            cfg["train"]=False
+            test_data = Dataset(**cfg)
+
+            setattr(test_data, "normalize", normalization)
+            split = int(np.floor(valid_size * num_train))
+            train_idx, valid_idx = indices[split:], indices[:split]
+            train_sampler = torch.utils.data.sampler.SubsetRandomSampler(train_idx)
+            valid_sampler = torch.utils.data.sampler.SubsetRandomSampler(valid_idx)
+            test_loader = torch.utils.data.DataLoader(
+                test_data, batch_size=batch_size, shuffle=False,
+                num_workers=num_workers, pin_memory=pin_memory,
+            )
+        else :
+            split = int(np.floor(valid_size * 2 * num_train))
+            train_idx, valid_idx,test_idx = indices[0:-split],indices[-split : -split//2 ],indices[-split//2 : ]
+            train_sampler = torch.utils.data.sampler.SubsetRandomSampler(train_idx)
+            valid_sampler = torch.utils.data.sampler.SubsetRandomSampler(valid_idx)
+            test_sampler = torch.utils.data.sampler.SubsetRandomSampler(test_idx)
+
+
+            test_loader = torch.utils.data.DataLoader(
+                dataset, batch_size=batch_size, sampler=test_sampler,
+                num_workers=num_workers, pin_memory=pin_memory,
+            )
 
     train_loader = torch.utils.data.DataLoader(
         dataset, batch_size=batch_size, sampler=train_sampler,
@@ -138,9 +170,7 @@ def Dataset(dataset : torch.utils.data.Dataset or str,num_classes : int,batch_si
         num_workers=num_workers, pin_memory=pin_memory,
     )
 
-
-
-    return train_loader,valid_loader
+    return train_loader,valid_loader,test_loader
 
 
 #@torch.jit.script
@@ -166,19 +196,12 @@ class normalization :
 
 
 if __name__ == "__main__":
-    train_loader,val_loader = Dataset(dataset = "CIFAR10",num_classes=10,batch_size=32, valid_size=0.1, shuffle=True, num_workers=0, pin_memory=False, mean=(0.5,0.5,0.5), std=(0.5,0.5,0.5), root="../../data",debug=False,prob=[1,1],label_smoothing=0.1)
+    train_loader,val_loader,test_loader = Dataset(Dataset = "CIFAR10",num_classes=10,batch_size=32, valid_size=0.1, shuffle=True, num_workers=0, pin_memory=False, mean=(0.5,0.5,0.5), std=(0.5,0.5,0.5), root="../../data",debug=False,prob=[1,1],label_smoothing=0.1)
 
     image,label = next(iter(train_loader))
 
-    training_data = datasets.CIFAR10(
-        root="../../data",
-        train=True,
-        download=True,
-        transform=train_transform,
-        target_transform=None
+    training_data = datasets.CIFAR10
 
-    )
-
-    train_loader, val_loader = Dataset(dataset=training_data, num_classes=10, batch_size=32, valid_size=0.1, shuffle=True,
+    train_loader, val_loader,test_loader = Dataset(Dataset=training_data, num_classes=10, batch_size=32, valid_size=0.1, shuffle=True,
                                        num_workers=0, pin_memory=False, mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5),
                                        root="../../data", debug=False, prob=[1, 1], label_smoothing=0.1,extras = {"something" : 1})

@@ -61,7 +61,7 @@ def main() :
     mean = (0.485, 0.456, 0.406) # (0.4914, 0.4822, 0.4465), (0.247, 0.243, 0.261)
     std = (0.229, 0.224, 0.225)
     root = "data"
-    train_loader,val_loader = Dataset("CIFAR10",10,batch_size, valid_size, shuffle, num_workers, pin_memory, mean, std, root,config["debug"],prob=config["augment_prob"],label_smoothing=config["label_smoothing"])
+    train_loader,val_loader,test_loader = Dataset("CIFAR10",10,batch_size, valid_size, shuffle, num_workers, pin_memory, mean, std, root,config["debug"],prob=config["augment_prob"],label_smoothing=config["label_smoothing"])
 
 
 
