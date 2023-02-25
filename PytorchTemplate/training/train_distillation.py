@@ -112,7 +112,7 @@ def main() :
     teacher_model = AveragedModel(teacher_model)
     setattr(teacher_model,"name",name)
     teacher_model.load_state_dict(torch.load(f"models_weights/{name}.pt"))
-    teacher_model = teacher_model.to(experiment.device)
+    teacher_model = teacher_model.to(experiment.device,dtype=torch.float16)
 
 
     # import torch.nn.utils.prune as prune

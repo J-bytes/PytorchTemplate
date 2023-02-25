@@ -17,7 +17,7 @@ from tqdm.contrib.logging import logging_redirect_tqdm
 import torch.distributed as dist
 import torch_optimizer
 
-from PytorchTemplate.Metrics import metrics
+import sklearn.metrics as skm
 import tqdm
 import timm
 from torch.optim.swa_utils import AveragedModel,SWALR
@@ -52,7 +52,7 @@ class Experiment:
         self.names = names
         self.num_classes = len(names)
         self.weight_dir = "models_weights/"
-        self.metrics = metrics
+
         self.config = config
         self.summary = {}
         self.metrics_results = {}
@@ -102,7 +102,7 @@ class Experiment:
             device = "cpu"
             warnings.warn("No gpu is available for the computation")
 
-        self.device = device
+        self.device = torch.device(device)
 
         # --------- instantiate experiment tracker -----------------------
         if config["wandb"]:
@@ -185,7 +185,7 @@ class Experiment:
                 self.tracker.run.summary[key] = value
             self.tracker.finish()
 
-    def compile(self,model_name,train_loader,val_loader,optimizer : str or None,criterion : str or None ,final_activation) :
+    def compile(self,model_name,train_loader,val_loader,optimizer : str or None,criterion : str or None ,final_activation,metrics : list or None) :
         """
             Compile the experiment before variation
 
@@ -238,10 +238,14 @@ class Experiment:
 
         self.num_classes = len(self.names)
 
-        assert optimizer in dir(torch.optim)+[None]
-        assert criterion in dir(torch.nn)+[None]
-
-
+        if metrics is not None :
+            self.metrics = {}
+            for metric in metrics :
+                assert metric in dir(skm), f"The metric {metric} is not implemented yet"
+                self.metrics[metric] = getattr(skm, metric)
+        else :
+            self.metrics = None
+            logging.info("No metrics have been specified. Only the loss will be computed")
 
 
 
@@ -368,12 +372,13 @@ class Experiment:
         running_loss = 0
 
         self.model.train()
+        dtype = list(self.model.parameters())[0].dtype
         i = 1
         for images, labels in tqdm.tqdm(self.train_loader):
             self.optimizer.zero_grad(set_to_none=True)
             # send to GPU
             images, labels = (
-                images.to(self.device, non_blocking=True),
+                images.to(self.device, non_blocking=True,dtype=dtype),
                 labels.to(self.device, non_blocking=True),
             )
 
@@ -444,7 +449,7 @@ class Experiment:
         running_loss = 0
 
         self.model.eval()
-
+        dtype = list(self.model.parameters())[0].dtype
         results = [torch.tensor([]), torch.tensor([])]
 
         for images, labels  in tqdm.tqdm(self.val_loader):
@@ -452,8 +457,8 @@ class Experiment:
 
             # send to GPU
             images, labels = (
-                images.to(self.device, non_blocking=True),
-                labels.to(self.device, non_blocking=True),
+                images.to(self.device, non_blocking=True,dtype=dtype),
+                labels.to(self.device, non_blocking=True)
             )
 
 
@@ -471,8 +476,8 @@ class Experiment:
 
             running_loss += loss.detach()
             outputs = outputs.detach().cpu()
-            results[1] = torch.cat((results[1], outputs), dim=0)
-            results[0] = torch.cat((results[0], labels.cpu().round(decimals=0)),
+            results[1] = torch.cat((results[1], outputs.float()), dim=0)
+            results[0] = torch.cat((results[0], labels.cpu().float().round(decimals=0)),
                                    dim=0)  # round to 0 or 1 in case of label smoothing
 
             del (

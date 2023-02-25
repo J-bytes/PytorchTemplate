@@ -5,6 +5,7 @@ Created on 2023-02-20$
 
 @author: Jonathan Beaulieu-Emond
 """
+import inspect
 
 import torch
 import numpy as np
@@ -13,10 +14,11 @@ from torchvision import datasets
 from PytorchTemplate.augmentations import  CutMix,MixUp,CutOut
 
 class target_transform :
-    def __init__(self,smooth : float=0) :
+    def __init__(self,smooth : float=0,num_classes : int=10) :
         self.smooth=smooth
+        self.num_classes = num_classes
     def __call__(self,i : int) :
-        label = torch.zeros((10,))+self.smooth
+        label = torch.zeros((self.num_classes,))+self.smooth
         label[i]= 1 - self.smooth
 
         return label
@@ -41,7 +43,7 @@ class normalization :
 
 
 
-def cifar10(batch_size,valid_size,shuffle,num_workers,pin_memory,mean,std,root,debug,prob,label_smoothing) :
+def dataset(dataset_name,num_classes,batch_size,valid_size,shuffle,num_workers,pin_memory,mean,std,root,debug,prob,label_smoothing) :
 
 
 
@@ -63,24 +65,21 @@ def cifar10(batch_size,valid_size,shuffle,num_workers,pin_memory,mean,std,root,d
     )
 
 
+    dataset = getattr(datasets,dataset_name)
+    cfg = {
+    "root" : root,
+    "train" : True,
+    "download" : True,
+    "transform" : train_transform,
+    "target_transform" : target_transform(smooth=label_smoothing,num_classes=num_classes)
 
-    training_data = datasets.CIFAR10(
-        root=root,
-        train=True,
-        download=True,
-        transform=train_transform,
-        target_transform=target_transform(smooth=label_smoothing)
-
-    )
-
-    valid_data = datasets.CIFAR10(
-        root=root,
-        train=True,
-        download=True,
-        transform=transforms.ToTensor(),
-        target_transform=target_transform(smooth=0)
-
-    )
+    }
+    signature = inspect.signature(dataset)
+    params = {key: cfg[key] for key in list(signature.parameters.keys()) if key in cfg}
+    training_data = dataset(**params)
+    #cfg["train"]=False
+    #test_data = dataset(**cfg)
+    #TODO : do data split for test depending on if parameter train in the class is available or not
 
 
 
@@ -91,7 +90,7 @@ def cifar10(batch_size,valid_size,shuffle,num_workers,pin_memory,mean,std,root,d
         ])
     setattr(training_data,"advanced_transform",advanced_transform)
     setattr(training_data, "normalize",normalization(mean,std,mode="train"))
-    setattr(valid_data, "normalize", normalization(mean, std, mode="valid"))
+    #setattr(test_data, "normalize", normalization(mean, std, mode="valid"))
 
     num_train = len(training_data)
     indices = list(range(num_train))
@@ -113,11 +112,22 @@ def cifar10(batch_size,valid_size,shuffle,num_workers,pin_memory,mean,std,root,d
         num_workers=num_workers, pin_memory=pin_memory,
     )
     valid_loader = torch.utils.data.DataLoader(
-        valid_data, batch_size=batch_size, sampler=valid_sampler,
+        training_data, batch_size=batch_size, sampler=valid_sampler,
         num_workers=num_workers, pin_memory=pin_memory,
     )
+
+
     return train_loader,valid_loader
 
 
 if __name__ == "__main__":
-    cifar10()
+
+    print(dir(datasets))
+    num_classes = 300
+    for item in dir(datasets) :
+        try :
+            train_loader,valid_loader = dataset(str(item),num_classes,128,0.2,True,0,False,[0.4914, 0.4822, 0.4465],[0.2023, 0.1994, 0.2010],"../../data",False,[0.5,0.5,0.5],0.1)
+            image,label = next(iter(train_loader))
+            print("Success for ",item)
+        except Exception as e:
+            print("Failed for ",item,e)

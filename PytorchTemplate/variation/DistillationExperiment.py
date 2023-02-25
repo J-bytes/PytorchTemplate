@@ -55,7 +55,8 @@ class DistillationExperiment(Experiment):
 
         self.model.train()
         self.teacher.eval()
-
+        dtype = list(self.model.parameters())[0].dtype
+        dtype2 = list(self.teacher.parameters())[0].dtype
 
 
         running_loss = 0
@@ -63,10 +64,6 @@ class DistillationExperiment(Experiment):
         for images, labels in tqdm.tqdm(self.train_loader):
             self.optimizer.zero_grad(set_to_none=True)
             # send to GPU
-            images, labels = (
-                images.to(self.device, non_blocking=True),
-                labels.to(self.device, non_blocking=True),
-            )
 
             # Apply advanced transformation requiring multiple inputs
 
@@ -78,11 +75,11 @@ class DistillationExperiment(Experiment):
             with torch.no_grad():
                 images = self.train_loader.dataset.normalize(images)
                 with torch.cuda.amp.autocast(enabled=self.autocast):
-                    labels = self.teacher(images)
+                    labels = self.teacher(images.to(self.device,dtype=dtype2,non_blocking=True)).to(self.device,dtype=dtype,non_blocking=True)
 
             with torch.cuda.amp.autocast(enabled=self.autocast):
 
-                outputs = self.model(images)
+                outputs = self.model(images.to(self.device,dtype=dtype,non_blocking=True))
 
             loss = self.criterion(outputs, labels)
 
@@ -130,7 +127,7 @@ class DistillationExperiment(Experiment):
         running_loss = 0
 
         self.model.eval()
-
+        dtype = list(self.model.parameters())[0].dtype
         results = [torch.tensor([]), torch.tensor([])]
 
 
@@ -139,8 +136,8 @@ class DistillationExperiment(Experiment):
 
             # send to GPU
             images, labels = (
-                images.to(self.device, non_blocking=True),
-                labels.to(self.device, non_blocking=True),
+                images.to(self.device, non_blocking=True,dtype=dtype),
+                labels.to(self.device, non_blocking=True,dtype=dtype),
             )
 
 
@@ -154,9 +151,9 @@ class DistillationExperiment(Experiment):
             loss = self.criterion(outputs.float(), labels.float())
 
             running_loss += loss.detach()
-            outputs = outputs.detach().cpu()
+            outputs = outputs.detach().cpu().float()
             results[1] = torch.cat((results[1], outputs), dim=0)
-            results[0] = torch.cat((results[0], labels.cpu().round(decimals=0)),
+            results[0] = torch.cat((results[0], labels.cpu().float().round(decimals=0)),
                                    dim=0)  # round to 0 or 1 in case of label smoothing
 
             del (
