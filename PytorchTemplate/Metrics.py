@@ -41,6 +41,7 @@ class Metrics:
         accuracy = timm.utils.metrics.accuracy(pred,true, topk=(3,))
         return accuracy
     def accuracy(self, true, pred):
+
         true = np.argmax(true,axis=1)
         pred = np.argmax(pred,axis=1)
         accuracy = np.sum(true==pred)/len(true)

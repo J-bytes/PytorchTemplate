@@ -80,10 +80,6 @@ def Dataset(Dataset : torch.utils.data.Dataset or str,num_classes : int,batch_si
             label[i] = 1 - self.smooth
 
             return label
-        def __call__(self, i: torch.Tensor):
-
-
-            return i
 
 
     #-------- Advanced Transform ----------------
@@ -124,42 +120,45 @@ def Dataset(Dataset : torch.utils.data.Dataset or str,num_classes : int,batch_si
         np.random.shuffle(indices)
 
 
-    if debug :
-        train_idx, valid_idx,test_idx = indices[0:10], indices[10:20],indices[20:30]
+    # if debug :
+    #     train_idx, valid_idx,test_idx = indices[0:10], indices[10:20],indices[20:30]
+    #     train_sampler = torch.utils.data.sampler.SubsetRandomSampler(train_idx)
+    #     valid_sampler = torch.utils.data.sampler.SubsetRandomSampler(valid_idx)
+    #     test_sampler = torch.utils.data.sampler.SubsetRandomSampler(test_idx)
+    #     test_loader = torch.utils.data.DataLoader(
+    #         training_data, batch_size=batch_size, sampler=test_sampler,
+    #         num_workers=num_workers, pin_memory=pin_memory,
+    #     )
+    # else :
+
+    if "train" in signature.parameters.keys() :
+        cfg["train"]=False
+        test_data = Dataset(**cfg)
+
+        setattr(test_data, "normalize", normalization)
+        split = int(np.floor(valid_size * num_train))
+        if debug :
+            train_idx, valid_idx = indices[0:100], indices[100:200]
+        else :
+            train_idx, valid_idx = indices[split:], indices[:split]
         train_sampler = torch.utils.data.sampler.SubsetRandomSampler(train_idx)
         valid_sampler = torch.utils.data.sampler.SubsetRandomSampler(valid_idx)
-        test_sampler = torch.utils.data.sampler.SubsetRandomSampler(test_idx)
         test_loader = torch.utils.data.DataLoader(
-            training_data, batch_size=batch_size, sampler=test_sampler,
+            test_data, batch_size=batch_size, shuffle=False,
             num_workers=num_workers, pin_memory=pin_memory,
         )
     else :
-
-        if "train" in signature.parameters.keys() :
-            cfg["train"]=False
-            test_data = Dataset(**cfg)
-
-            setattr(test_data, "normalize", normalization)
-            split = int(np.floor(valid_size * num_train))
-            train_idx, valid_idx = indices[split:], indices[:split]
-            train_sampler = torch.utils.data.sampler.SubsetRandomSampler(train_idx)
-            valid_sampler = torch.utils.data.sampler.SubsetRandomSampler(valid_idx)
-            test_loader = torch.utils.data.DataLoader(
-                test_data, batch_size=batch_size, shuffle=False,
-                num_workers=num_workers, pin_memory=pin_memory,
-            )
-        else :
-            split = int(np.floor(valid_size * 2 * num_train))
-            train_idx, valid_idx,test_idx = indices[0:-split],indices[-split : -split//2 ],indices[-split//2 : ]
-            train_sampler = torch.utils.data.sampler.SubsetRandomSampler(train_idx)
-            valid_sampler = torch.utils.data.sampler.SubsetRandomSampler(valid_idx)
-            test_sampler = torch.utils.data.sampler.SubsetRandomSampler(test_idx)
+        split = int(np.floor(valid_size * 2 * num_train))
+        train_idx, valid_idx,test_idx = indices[0:-split],indices[-split : -split//2 ],indices[-split//2 : ]
+        train_sampler = torch.utils.data.sampler.SubsetRandomSampler(train_idx)
+        valid_sampler = torch.utils.data.sampler.SubsetRandomSampler(valid_idx)
+        test_sampler = torch.utils.data.sampler.SubsetRandomSampler(test_idx)
 
 
-            test_loader = torch.utils.data.DataLoader(
-                dataset, batch_size=batch_size, sampler=test_sampler,
-                num_workers=num_workers, pin_memory=pin_memory,
-            )
+        test_loader = torch.utils.data.DataLoader(
+            dataset, batch_size=batch_size, sampler=test_sampler,
+            num_workers=num_workers, pin_memory=pin_memory,
+        )
 
     train_loader = torch.utils.data.DataLoader(
         dataset, batch_size=batch_size, sampler=train_sampler,

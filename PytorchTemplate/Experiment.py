@@ -24,7 +24,7 @@ from torch.optim.swa_utils import AveragedModel,SWALR
 import torch
 import numpy as np
 import pandas as pd
-
+from PytorchTemplate.Metrics import metrics
 
 
 class Experiment:
@@ -185,7 +185,7 @@ class Experiment:
                 self.tracker.run.summary[key] = value
             self.tracker.finish()
 
-    def compile(self,model_name,train_loader,val_loader,optimizer : str or None,criterion : str or None ,final_activation,metrics : list or None) :
+    def compile(self,model_name,train_loader,val_loader,optimizer : str or None,criterion : str or None ,final_activation) :
         """
             Compile the experiment before variation
 
@@ -238,14 +238,16 @@ class Experiment:
 
         self.num_classes = len(self.names)
 
-        if metrics is not None :
-            self.metrics = {}
-            for metric in metrics :
-                assert metric in dir(skm), f"The metric {metric} is not implemented yet"
-                self.metrics[metric] = getattr(skm, metric)
-        else :
-            self.metrics = None
-            logging.info("No metrics have been specified. Only the loss will be computed")
+        # if metrics is not None :
+        #     self.metrics = {}
+        #     for metric in metrics :
+        #         assert metric in dir(skm), f"The metric {metric} is not implemented yet"
+        #         self.metrics[metric] = getattr(skm, metric)
+        # else :
+        #     self.metrics = None
+        #     logging.info("No metrics have been specified. Only the loss will be computed")
+
+        self.metrics = metrics
 
 
 
